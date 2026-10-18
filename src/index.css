@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* Colors taken from the "Aquarium" logo. Change them here only. */
+@theme {
+  --font-sans: "Heebo", "Arial Hebrew", "Segoe UI", Arial, sans-serif;
+
+  --color-brand: #4a2a1e;
+  --color-brand-soft: #6b4a3c;
+  --color-water: #2f7fa0;
+  --color-water-dark: #286f8c;
+  --color-water-bright: #3e96ba;
+  --color-water-tint: #e6f2f7;
+  --color-leaf: #5e8c3e;
+  --color-leaf-bright: #78a854;
+  --color-leaf-tint: #eaf3e3;
+  --color-berry: #b8285e;
+  --color-berry-tint: #f8e6ee;
+  --color-danger: #c62828;
+  --color-danger-tint: #fdecea;
+  --color-page: #faf7f4;
+  --color-line: #eadfd8;
+  --color-line-soft: #f3ece7;
+  --color-muted: #7a6a62;
+  --color-ink: #2e1c15;
+  --color-sand: #f1ece9;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-water-bright);
+    outline-offset: 2px;
+  }
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 font-bold transition-colors disabled:opacity-50;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap;
+  &::before {
+    content: "";
+    @apply size-[7px] rounded-full bg-current;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply btn bg-water text-white hover:bg-water-dark;
+  }
+  .btn-ghost {
+    @apply btn border border-line bg-white text-brand hover:bg-[#f6f0ec];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:bg-[#a72020];
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-white;
+  }
+  .field-label {
+    @apply mb-1 block text-[13px] font-medium text-muted;
+  }
+  .input {
+    @apply w-full min-w-0 rounded-[10px] border border-line bg-white px-3 py-2 text-[15px] text-ink placeholder:text-[#b3a59e] focus:border-water-bright focus:outline-none;
+  }
+  .input-error {
+    @apply border-danger;
+  }
+  .chip-leaf {
+    @apply chip bg-leaf-tint text-leaf;
+  }
+  .chip-berry {
+    @apply chip bg-berry-tint text-berry;
+  }
+  .chip-water {
+    @apply chip bg-water-tint text-water;
+  }
+  .chip-muted {
+    @apply chip bg-sand text-muted;
+  }
+  .th {
+    @apply border-b border-line px-3.5 py-3 text-right text-[13px] font-medium whitespace-nowrap text-muted;
+  }
+  .td {
+    @apply border-b border-line-soft px-3.5 py-3 whitespace-nowrap;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
