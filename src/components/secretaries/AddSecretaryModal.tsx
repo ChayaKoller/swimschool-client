@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UserPlus } from "lucide-react";
+import { UserRoundPlus } from "lucide-react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useCreateSecretary } from "../../api/secretaries/hook";
 import { secretaryFormSchema, toCreateSecretaryRequest, type SecretaryFormValues } from "../../api/secretaries/schema";
@@ -56,7 +56,7 @@ export default function AddSecretaryModal({ onClose }: AddSecretaryModalProps) {
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             ביטול
           </Button>
-          <Button type="submit" form={FORM_ID} isLoading={isSubmitting} icon={<UserPlus />}>
+          <Button type="submit" form={FORM_ID} isLoading={isSubmitting} icon={<UserRoundPlus  />}>
             רישום
           </Button>
         </>

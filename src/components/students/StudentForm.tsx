@@ -35,15 +35,9 @@ export default function StudentForm({ defaultValues, isEdit, onSubmit, onCancel 
   } = useForm<studentFormInput, unknown, studentFormData>({ resolver: zodResolver(studentFormSchema), defaultValues });
   const fieldProps = createFieldProps(register, errors);
 
-  const { handleServerError, formError } = useServerErrors(setError, CODE_TO_FIELD);
+  const { withServerErrors, formError } = useServerErrors(setError, CODE_TO_FIELD);
 
-  const submit = handleSubmit(async (values) => {
-    try {
-      await onSubmit(values);
-    } catch (error) {
-      handleServerError(error);
-    }
-  });
+  const submit = handleSubmit(withServerErrors(onSubmit));
 
   const placementLength = (useWatch({ control, name: "placementRequest" }) ?? "").length;
 

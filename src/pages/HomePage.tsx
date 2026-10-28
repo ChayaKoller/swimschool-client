@@ -24,7 +24,7 @@ export default function HomePage() {
             שלום, <span className="text-inflated bg-inflate">{user.fullName}</span>
           </h1>
           <p className="mt-2 text-sm font-semibold text-line/80 animate-fade-up [animation-delay:0.4s] md:text-base">
-            {formatWeekday(new Date().toISOString())}, <span className="tabular-nums">{formatDate(todayIsrael())}</span>
+            {formatWeekday(todayIsrael())}, <span className="tabular-nums">{formatDate(todayIsrael())}</span>
           </p>
         </div>
  

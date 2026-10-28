@@ -39,5 +39,18 @@ export function useServerErrors<T extends FieldValues>(
     [setError, codeToField],
   );
 
-  return { formError, handleServerError, clearFormError };
+  // עוטף שליחה של טופס: שגיאה מהשרת עוברת ל-handleServerError ולא נזרקת הלאה
+  const withServerErrors = useCallback(
+    <V,>(submit: (values: V) => Promise<unknown>) =>
+      async (values: V) => {
+        try {
+          await submit(values);
+        } catch (error) {
+          handleServerError(error);
+        }
+      },
+    [handleServerError],
+  );
+
+  return { formError, handleServerError, clearFormError, withServerErrors };
 }
