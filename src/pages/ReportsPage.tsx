@@ -1,95 +1,113 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { reportsApi } from '../api/endpoints'
-import type { HealthFund } from '../api/types'
-import PageHeader from '../components/PageHeader'
-import Pagination from '../components/Pagination'
-import ReportsTable from '../components/ReportsTable'
-import { Empty, ErrorState, Loading } from '../components/States'
-import { useDebounced } from '../components/useDebounced'
-import { healthFundLabels } from '../lib/format'
+import clsx from "clsx";
+import { Plus } from "lucide-react";
+import { useNavigate } from "react-router";
+import { useReports } from "../api/reports/hook";
+import { REPORT_FILTER_DEFAULTS } from "../api/reports/schema";
+import useDebounce from "../lib/useDebounce";
+import useUrlFilters from "../lib/useUrlFilters";
+import { isHealthFund } from "../lib/labels";
+import PageHeader from "../components/layout/PageHeader";
+import ReportFilters from "../components/reports/ReportFilters";
+import ReportsTable from "../components/reports/ReportsTable";
+import Button from "../components/ui/Button";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import Pagination from "../components/ui/Pagination";
+import Skeleton from "../components/ui/Skeleton";
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 20;
 
 export default function ReportsPage() {
-  const [search, setSearch] = useState('')
-  const [healthFund, setHealthFund] = useState<HealthFund | ''>('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
-  const [page, setPage] = useState(1)
-  const text = useDebounced(search.trim())
-  const rangeInvalid = fromDate !== '' && toDate !== '' && fromDate > toDate
+  const navigate = useNavigate();
+  const { values, page, setFilter, setPage, clearFilters, hasFilters } = useUrlFilters(REPORT_FILTER_DEFAULTS);
+  const debouncedSearch = useDebounce(values.search);
 
-  const query = useQuery({
-    queryKey: ['reports', { text, healthFund, fromDate, toDate, page }],
-    queryFn: () => reportsApi.list({ search: text || undefined, healthFund, fromDate: fromDate || undefined, toDate: toDate || undefined, page, pageSize: PAGE_SIZE }),
-    placeholderData: keepPreviousData,
-    enabled: !rangeInvalid,
-  })
+  // טווח הפוך לא נשלח לשרת. ההודעה מופיעה ליד "עד תאריך"
+  const rangeInvalid = values.fromDate !== "" && values.toDate !== "" && values.fromDate > values.toDate;
 
-  const reset = () => setPage(1)
+  const reports = useReports({
+    search: debouncedSearch || undefined,
+    healthFund: isHealthFund(values.healthFund) ? values.healthFund : undefined,
+    fromDate: rangeInvalid ? undefined : values.fromDate || undefined,
+    toDate: rangeInvalid ? undefined : values.toDate || undefined,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+
+  const goToNew = () => navigate("/reports/new");
+
+  function renderContent() {
+    if (reports.isPending) return <Skeleton rows={8} />;
+
+    if (reports.isError) return <ErrorState error={reports.error} onRetry={() => reports.refetch()} />;
+
+    const { items, totalCount, totalPages } = reports.data;
+
+    if (items.length === 0) {
+      return hasFilters ? (
+        <EmptyState
+          title="לא נמצאו דוחות שמתאימים לחיפוש"
+          description="אפשר לשנות את הסינונים או לנקות אותם."
+          action={
+            <Button variant="secondary" onClick={clearFilters}>
+              ניקוי סינונים
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          title="עוד לא הופקו דוחות"
+          description="דוח לקופה מפיקים מכאן, או מדף התלמידה."
+          action={
+            <Button onClick={goToNew} icon={<Plus />}>
+              דוח חדש
+            </Button>
+          }
+        />
+      );
+    }
+
+    return (
+      <>
+        <p className="mb-3 text-sm text-slate-600">
+          {totalCount === 1 ? (
+            "נמצא דוח אחד"
+          ) : (
+            <>
+              נמצאו <span className="font-bold text-line tabular-nums">{totalCount}</span> דוחות
+            </>
+          )}
+        </p>
+
+        <div className={clsx("transition-opacity", reports.isPlaceholderData && "opacity-60")}>
+          <ReportsTable reports={items} showStudent />
+        </div>
+
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </>
+    );
+  }
 
   return (
-    <>
+    <div>
       <PageHeader
         title="דוחות לקופות"
-        subtitle="כל הדוחות שהופקו, מהחדש לישן"
         actions={
-          <Link to="/reports/new" className="btn-primary">
-            + דוח חדש
-          </Link>
+          <Button onClick={goToNew} icon={<Plus />}>
+            דוח חדש
+          </Button>
         }
       />
-      <div className="card">
-        <div className="flex flex-wrap gap-3 p-3.5">
-          <div className="min-w-[180px] flex-[2]">
-            <label className="field-label" htmlFor="r-search">
-              שם תלמידה או ת"ז
-            </label>
-            <input id="r-search" className="input" placeholder="חיפוש" value={search} onChange={(e) => { setSearch(e.target.value); reset() }} />
-          </div>
-          <div className="min-w-[130px] flex-1">
-            <label className="field-label" htmlFor="r-fund">
-              קופה
-            </label>
-            <select id="r-fund" className="input" value={healthFund} onChange={(e) => { setHealthFund(e.target.value as HealthFund | ''); reset() }}>
-              <option value="">כל הקופות</option>
-              {Object.entries(healthFundLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-[140px] flex-1">
-            <label className="field-label" htmlFor="r-from">
-              מתאריך הנפקה
-            </label>
-            <input id="r-from" type="date" className="input" value={fromDate} onChange={(e) => { setFromDate(e.target.value); reset() }} />
-          </div>
-          <div className="min-w-[140px] flex-1">
-            <label className="field-label" htmlFor="r-to">
-              עד תאריך
-            </label>
-            <input id="r-to" type="date" className={`input ${rangeInvalid ? 'input-error' : ''}`} value={toDate} onChange={(e) => { setToDate(e.target.value); reset() }} />
-          </div>
-        </div>
-        {rangeInvalid && <p className="px-3.5 pb-3 text-sm text-danger">תאריך ההתחלה מאוחר מתאריך הסיום</p>}
 
-        {rangeInvalid ? null : query.isPending ? (
-          <Loading />
-        ) : query.isError ? (
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        ) : query.data.items.length === 0 ? (
-          <Empty text="לא נמצאו דוחות" />
-        ) : (
-          <>
-            <ReportsTable reports={query.data.items} />
-            <Pagination page={query.data.page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} pageSize={query.data.pageSize} onChange={setPage} />
-          </>
-        )}
-      </div>
-    </>
-  )
+      <ReportFilters
+        values={values}
+        onChange={setFilter}
+        onClear={clearFilters}
+        hasFilters={hasFilters}
+        rangeInvalid={rangeInvalid}
+      />
+
+      {renderContent()}
+    </div>
+  );
 }

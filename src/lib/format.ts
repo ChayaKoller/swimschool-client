@@ -1,55 +1,87 @@
-import type { HealthFund, Season, TreatmentType, UserRole } from '../api/types'
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import "dayjs/locale/he";
 
-const TIME_ZONE = 'Asia/Jerusalem'
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
-export const healthFundLabels: Record<HealthFund, string> = {
-  Maccabi: 'מכבי',
-  Clalit: 'כללית',
-  Meuhedet: 'מאוחדת',
-  Leumit: 'לאומית',
+const ISRAEL_TZ = "Asia/Jerusalem";
+
+const moneyFormatter = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+
+// זמן UTC מהשרת -> אותו רגע בשעון ישראל
+function toIsrael(utcValue: string) {
+  return dayjs.utc(utcValue).tz(ISRAEL_TZ);
 }
 
-export const seasonLabels: Record<Season, string> = {
-  Winter: 'חורף',
-  Spring: 'אביב',
-  Summer: 'קיץ',
-  Autumn: 'סתיו',
+// "2026-10-19" -> "19/10/2026" (תאריך בלבד, בלי המרת שעון)
+export function formatDate(date: string): string {
+  return dayjs(date).format("DD/MM/YYYY");
 }
 
-export const treatmentLabels: Record<TreatmentType, string> = {
-  Group: 'טיפול בקבוצה',
-  Individual: 'טיפול פרטני',
+// "2026-11-01T15:00:00Z" -> "01/11/2026 17:00"
+export function formatDateTime(utcValue: string): string {
+  return toIsrael(utcValue).format("DD/MM/YYYY HH:mm");
 }
 
-export const roleLabels: Record<UserRole, string> = {
-  Teacher: 'מורה',
-  Secretary: 'מזכירה',
+// "2026-11-01T15:00:00Z" -> "17:00"
+export function formatTime(utcValue: string): string {
+  return toIsrael(utcValue).format("HH:mm");
 }
 
-const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 })
-export const formatMoney = (value: number) => money.format(value)
-
-// Server lesson times are UTC; show them in Israel time
-const dateTime = new Intl.DateTimeFormat('he-IL', {
-  timeZone: TIME_ZONE,
-  weekday: 'long',
-  day: '2-digit',
-  month: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-export const formatDateTime = (iso: string) => dateTime.format(new Date(iso))
-
-const dateOnly = new Intl.DateTimeFormat('he-IL', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' })
-export const formatDate = (iso: string) => dateOnly.format(new Date(iso))
-
-// "2026-10-19" (DateOnly from the server) -> "19.10.2026", without time zone shifts
-export function formatDay(day: string): string {
-  const [y, m, d] = day.split('-')
-  return `${d}.${m}.${y}`
+// "2026-11-01T15:00:00Z" -> "יום ראשון"
+export function formatWeekday(utcValue: string): string {
+  return toIsrael(utcValue).locale("he").format("[יום] dddd");
 }
 
-// Today's date in Israel as "yyyy-mm-dd" (for date inputs and the "no future dates" rule)
-export function israelToday(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(new Date())
+// זמן UTC מהשרת -> ערך לשדה datetime-local בשעון ישראל: "2026-11-01T17:00"
+export function toLocalInput(utcValue: string): string {
+  return toIsrael(utcValue).format("YYYY-MM-DDTHH:mm");
+}
+
+// ערך משדה datetime-local -> מה ששולחים לשרת: שעון ישראל, בלי Z
+export function toServerLocal(localValue: string): string {
+  return dayjs(localValue).format("YYYY-MM-DDTHH:mm");
+}
+
+// התאריך של היום בישראל: "2026-10-21"
+export function todayIsrael(): string {
+  return dayjs().tz(ISRAEL_TZ).format("YYYY-MM-DD");
+}
+
+// 90 -> "‏90 ₪"
+export function formatMoney(amount: number): string {
+  return moneyFormatter.format(amount);
+}
+export function ageFrom(birthDate: string): number {
+  return dayjs().diff(dayjs(birthDate), "year");
+}
+
+const LESSON_FORMAT = "[יום] dddd, DD/MM/YYYY HH:mm";
+
+// "2026-11-01T15:00:00Z" -> "יום ראשון, 01/11/2026 17:00"
+export function formatLessonTime(utcValue: string): string {
+  return toIsrael(utcValue).locale("he").format(LESSON_FORMAT);
+}
+
+// "2026-11-01T17:00" (כבר בשעון ישראל) -> "יום ראשון, 01/11/2026 17:00"
+export function formatLocalLessonTime(localValue: string): string {
+  return dayjs(localValue).locale("he").format(LESSON_FORMAT);
+}
+
+export function isFuture(utcValue: string): boolean {
+  return dayjs.utc(utcValue).isAfter(dayjs());
+}
+export function formatShortDate(utcValue:string): string {
+  return toIsrael(utcValue).format("DD/MM");
+}
+
+export function formatWeekRange(): string {
+  const today = dayjs().tz(ISRAEL_TZ);
+  return `${today.format("DD/MM")} עד ${today.add(6, "day").format("DD/MM")}`;
 }

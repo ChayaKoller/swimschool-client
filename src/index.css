@@ -1,106 +1,161 @@
 @import "tailwindcss";
-
-/* Colors taken from the "Aquarium" logo. Change them here only. */
+ 
+/* ה-Theme של "שחייה בכיף". כל הצבעים, הגופנים, הפינות והצללים מוגדרים כאן בלבד.
+   כל משתנה כאן הופך לקלאס של Tailwind: --color-primary -> bg-primary / text-primary / border-primary,
+   --radius-card -> rounded-card, --shadow-soft -> shadow-soft, --font-brand -> font-brand */
 @theme {
-  --font-sans: "Heebo", "Arial Hebrew", "Segoe UI", Arial, sans-serif;
-
-  --color-brand: #4a2a1e;
-  --color-brand-soft: #6b4a3c;
-  --color-water: #2f7fa0;
-  --color-water-dark: #286f8c;
-  --color-water-bright: #3e96ba;
-  --color-water-tint: #e6f2f7;
-  --color-leaf: #5e8c3e;
-  --color-leaf-bright: #78a854;
-  --color-leaf-tint: #eaf3e3;
-  --color-berry: #b8285e;
-  --color-berry-tint: #f8e6ee;
-  --color-danger: #c62828;
-  --color-danger-tint: #fdecea;
-  --color-page: #faf7f4;
-  --color-line: #eadfd8;
-  --color-line-soft: #f3ece7;
-  --color-muted: #7a6a62;
-  --color-ink: #2e1c15;
-  --color-sand: #f1ece9;
+  /* גופנים */
+  --font-sans: "Rubik", system-ui, "Segoe UI", Arial, sans-serif;
+  --font-brand: "Fredoka", "Rubik", system-ui, sans-serif;
+ 
+  /* צבעים */
+  --color-water: #8fd6e7;        /* מים: מסך כניסה, פס הכותרת, ברוכים הבאים */
+  --color-page: #eaf8fb;         /* רקע העמוד */
+  --color-primary: #1890a8;      /* כחול עמוק: כפתורים, קישורים, שדה פעיל */
+  --color-primary-text: #137a90; /* כחול עמוק לטקסט על רקע בהיר */
+  --color-ink: #5b60aa;          /* סגול כהה: כותרות עמודים, טקסט מודגש */
+  --color-pink: #ef5b95;         /* הדגשות, תגיות, הכפתור החשוב בעמוד */
+  --color-coral: #f07860;        /* התראות עדינות, "טרם סומן" */
+  --color-lavender: #c078d8;     /* רקעים עדינים לתגיות */
+  --color-brown: #4a2a1e;        /* רק בלוגו */
+  --color-success: #2e9e6a;      /* הודעות הצלחה בלבד */
+  --color-danger: #d93b3b;       /* הודעות שגיאה בלבד */
+ 
+  /* הקו העסקי: קו שחור דק וצל שחור "קשיח" לכפתורים */
+  --color-line: #14141f;
+  --shadow-hard: 3px 3px 0 var(--color-line);
+ 
+  /* פינות */
+  --radius-card: 16px;
+  --radius-control: 10px;
+ 
+  /* צללים רכים */
+  --shadow-soft: 0 4px 16px rgb(24 144 168 / 0.1);
+  --shadow-lifted: 0 10px 30px rgb(91 96 170 / 0.18);
 }
-
+ 
+/* הגרדיאנט ה"מתנפח": הכפתור הראשי, הפריט הפעיל בתפריט, העמוד הנוכחי בעימוד, פס תפוסה */
+@utility bg-inflate {
+  background-image: linear-gradient(135deg, #f07860 0%, #ef5b95 50%, #8a6fd8 100%);
+}
+ 
 @layer base {
-  html,
+  html {
+    background-color: var(--color-page);
+  }
+ 
   body {
-    background: var(--color-page);
-    color: var(--color-ink);
+    min-height: 100dvh;
+    background-color: var(--color-page);
+    color: #1e293b;
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
-  button {
-    cursor: pointer;
+ 
+  h1,
+  h2,
+  h3 {
+    color: var(--color-ink);
+    font-weight: 700;
   }
-  button:disabled {
-    cursor: not-allowed;
-  }
+ 
+  /* מסגרת מיקוד אחידה במקלדת, לכל רכיב שאפשר להגיע אליו */
   :focus-visible {
-    outline: 3px solid var(--color-water-bright);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
+ 
+  /* הרקע הכהה מאחורי חלון (<dialog>) */
+  dialog::backdrop {
+    background: rgb(15 23 42 / 0.45);
+  }
+}
+ 
+/* מי שביקש במערכת ההפעלה פחות תנועה, לא מקבל אנימציות */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* ===== מסך הכניסה: בריכה רכה (R2) ===== */
+@theme {
+  --font-pro: "Heebo", "Rubik", system-ui, sans-serif;
+  --animate-glow: glow 16s ease-in-out infinite alternate;
+  --animate-wave: wave 16s linear infinite;
+  --animate-wave-slow: wave 26s linear infinite;
+  --animate-rise: rise 12s ease-in infinite;
+  --animate-bob: bob 6s ease-in-out infinite;
+  --animate-inflate: inflate 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-surface: surface 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-ripple: ripple 1.6s ease-out both;
+  --animate-fade-up: fade-up 0.8s ease-out both;
+
+  @keyframes glow {
+    to { transform: translate(8%, 6%) scale(1.15); }
+  }
+  @keyframes wave {
+    to { transform: translateX(-50%); }
+  }
+  @keyframes rise {
+    0% { transform: translateY(0) scale(0.8); opacity: 0; }
+    15% { opacity: 0.7; }
+    100% { transform: translateY(-105dvh) scale(1.15); opacity: 0; }
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+    50% { transform: translateY(-12px) rotate(calc(var(--tilt, 0deg) + 4deg)); }
+  }
+  @keyframes surface {
+    0% { transform: translateY(70px) scale(0.94); opacity: 0; filter: blur(6px); }
+    100% { transform: none; opacity: 1; filter: none; }
+  }
+  @keyframes ripple {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  @keyframes fade-up {
+    0% { transform: translateY(16px); opacity: 0; }
+    100% { transform: none; opacity: 1; }
+  }
+  @keyframes inflate {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
 }
 
-@utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 font-bold transition-colors disabled:opacity-50;
+/* "שחיות בכיף": אותיות "מתנפחות" כמו בפוסטר */
+@utility text-inflated {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  line-height: 0.95;
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-stroke: 1px var(--color-line);
+  filter: drop-shadow(0 3px 0 rgb(52 30 160 / 0.6)) drop-shadow(0 10px 14px rgb(91 96 170 / 0.35));
 }
-
-@utility chip {
-  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap;
-  &::before {
-    content: "";
-    @apply size-[7px] rounded-full bg-current;
+/* ===== האיורים החיים בכניסה ובעמוד הבית (R8) ===== */
+@theme {
+  --animate-draw: draw 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-grow: grow 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-bars: bars 2.4s ease-in-out infinite;
+  --animate-rope: rope 3s linear infinite;
+ 
+  @keyframes draw {
+    from { stroke-dasharray: 0 100; }
   }
-}
-
-@layer components {
-  .btn-primary {
-    @apply btn bg-water text-white hover:bg-water-dark;
+  @keyframes grow {
+    from { transform: scaleX(0); }
   }
-  .btn-ghost {
-    @apply btn border border-line bg-white text-brand hover:bg-[#f6f0ec];
+  @keyframes bars {
+    50% { transform: scaleY(0.5); }
   }
-  .btn-danger {
-    @apply btn bg-danger text-white hover:bg-[#a72020];
-  }
-  .btn-sm {
-    @apply px-3 py-1.5 text-sm;
-  }
-  .card {
-    @apply rounded-xl border border-line bg-white;
-  }
-  .field-label {
-    @apply mb-1 block text-[13px] font-medium text-muted;
-  }
-  .input {
-    @apply w-full min-w-0 rounded-[10px] border border-line bg-white px-3 py-2 text-[15px] text-ink placeholder:text-[#b3a59e] focus:border-water-bright focus:outline-none;
-  }
-  .input-error {
-    @apply border-danger;
-  }
-  .chip-leaf {
-    @apply chip bg-leaf-tint text-leaf;
-  }
-  .chip-berry {
-    @apply chip bg-berry-tint text-berry;
-  }
-  .chip-water {
-    @apply chip bg-water-tint text-water;
-  }
-  .chip-muted {
-    @apply chip bg-sand text-muted;
-  }
-  .th {
-    @apply border-b border-line px-3.5 py-3 text-right text-[13px] font-medium whitespace-nowrap text-muted;
-  }
-  .td {
-    @apply border-b border-line-soft px-3.5 py-3 whitespace-nowrap;
+  @keyframes rope {
+    to { stroke-dashoffset: -24; }
   }
 }
-
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
+ 

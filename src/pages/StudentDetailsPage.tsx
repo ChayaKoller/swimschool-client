@@ -1,120 +1,189 @@
-import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { studentsApi } from '../api/endpoints'
-import PageHeader from '../components/PageHeader'
-import ReportsTable from '../components/ReportsTable'
-import { Empty, ErrorState, Loading } from '../components/States'
-import { formatDay, formatMoney, healthFundLabels, seasonLabels } from '../lib/format'
+import { ArrowLeftRight, ArrowRight, FilePlus2, Pencil, Trash2, UserPlus } from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { getErrorMessage, isNotFound } from "../api/apiError";
+import { useStudent, useUpdateStudent } from "../api/students/hook";
+import { studentFormSchema, toStudentFormValues, toUpdateStudentRequest } from "../api/students/schema";
+import CancelEnrollmentDialog from "../components/enrollment/CancelEnrollmentDialog";
+import EnrollModal from "../components/enrollment/EnrollModal";
+import PaymentModal from "../components/enrollment/PaymentModal";
+import PageHeader from "../components/layout/PageHeader";
+import DeleteStudentDialog from "../components/students/DeleteStudentDialog";
+import StudentGroupsTable from "../components/students/StudentGroupsTable";
+import StudentReportsTable from "../components/students/StudentReportsTable";
+import TransferStudentModal from "../components/students/TransferStudentModal";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
+import DetailList from "../components/ui/DetailList";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import LoadingState from "../components/ui/LoadingState";
+import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/useToast";
+import { ageFrom, formatDate } from "../lib/format";
+import { healthFundLabels } from "../lib/labels";
+import useGoBack from "../lib/useGoBack";
+import type { StudentGroupDto } from "../types/typesDtos";
 
 export default function StudentDetailsPage() {
-  const id = Number(useParams().id)
-  const student = useQuery({ queryKey: ['student', id], queryFn: () => studentsApi.get(id), enabled: Number.isInteger(id) })
-  const reports = useQuery({ queryKey: ['student', id, 'reports'], queryFn: () => studentsApi.reports(id), enabled: Number.isInteger(id) })
+  const { id } = useParams();
+  const studentId = Number(id);
+  const student = useStudent(studentId);
+  const updateStudent = useUpdateStudent();
+  const { user } = useAuth();
+  const isTeacher = user?.role === "Teacher";
+  const toast = useToast();
+  const navigate = useNavigate();
+  const goBack = useGoBack("/students");
 
-  if (student.isPending) return <Loading />
-  if (student.isError) return <ErrorState error={student.error} onRetry={() => student.refetch()} />
-  const s = student.data
-  const owed = s.groups.reduce((sum, g) => sum + Math.max(0, g.amountDue - g.amountPaid), 0)
+  // החלונות: false / null = סגור
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [payingRow, setPayingRow] = useState<StudentGroupDto | null>(null);
+  const [cancelingRow, setCancelingRow] = useState<StudentGroupDto | null>(null);
 
-  const details: [string, string][] = [
-    ['תעודת זהות', s.identityNumber],
-    ['טלפון', s.phone],
-    ['אימייל', s.email || '—'],
-    ['תאריך לידה', formatDay(s.birthDate)],
-    ['קופת חולים', healthFundLabels[s.healthFund]],
-    ['מורה אחראית', s.responsibleTeacherName],
-  ]
+  const backButton = (
+    <Button variant="ghost" onClick={goBack} icon={<ArrowRight />} className="-ms-3 mb-2 self-start">
+      חזרה לרשימה
+    </Button>
+  );
+
+  if (student.isPending) return <LoadingState label="טוען את פרטי התלמידה" />;
+
+  if (student.isError) {
+    return isNotFound(student.error) ? (
+      <EmptyState
+        title="התלמידה לא נמצאה"
+        description="ייתכן שהיא נמחקה או הועברה למורה אחרת."
+        action={
+          <Button variant="secondary" onClick={() => navigate("/students")}>
+            לרשימת התלמידות
+          </Button>
+        }
+      />
+    ) : (
+      <ErrorState error={student.error} onRetry={() => student.refetch()} />
+    );
+  }
+
+  const s = student.data;
+  const studentRef = { id: s.id, fullName: s.fullName };
+
+  const detailItems = [
+    { label: "תעודת זהות", value: <span className="tabular-nums">{s.identityNumber}</span> },
+    { label: "טלפון", value: <span dir="ltr" className="tabular-nums">{s.phone}</span> },
+    { label: "אימייל", value: s.email && <span dir="ltr">{s.email}</span> },
+    { label: "תאריך לידה", value: `${formatDate(s.birthDate)} (גיל ${ageFrom(s.birthDate)})` },
+    { label: "קופת חולים", value: healthFundLabels[s.healthFund] },
+    { label: "המורה האחראית", value: s.responsibleTeacherName },
+    { label: "בקשת שיבוץ", value: s.placementRequest },
+  ];
+
+  function reactivate() {
+    const values = studentFormSchema.parse({ ...toStudentFormValues(s), isActive: true });
+    updateStudent.mutate(
+      { id: s.id, body: toUpdateStudentRequest(values) },
+      {
+        onSuccess: () => {
+          toast.success(`${s.fullName} חזרה לפעילות`);
+          setConfirmOpen(false);
+        },
+        onError: (error) => {
+          toast.error(getErrorMessage(error));
+          setConfirmOpen(false);
+        },
+      },
+    );
+  }
 
   return (
-    <>
-      <Link to="/students" className="font-medium text-water hover:underline">
-        → חזרה לתלמידות
-      </Link>
+    <div className="flex flex-col">
+      {backButton}
+
       <PageHeader
         title={s.fullName}
-        subtitle={s.isActive ? (owed > 0 ? `חוב פתוח: ${formatMoney(owed)}` : 'אין חוב פתוח') : 'בארכיון'}
         actions={
-          <Link to={`/reports/new?studentId=${s.id}`} className="btn-primary">
-            + דוח חדש לקופה
-          </Link>
+          <>
+            <Button icon={<UserPlus />} onClick={() => setEnrollOpen(true)} disabled={!s.isActive}>
+              רישום לקבוצה
+            </Button>
+            <Button variant="secondary" icon={<FilePlus2 />} onClick={() => navigate(`/reports/new?studentId=${s.id}`)}>
+              דוח חדש
+            </Button>
+            <Button variant="secondary" icon={<Pencil />} onClick={() => navigate(`/students/${s.id}/edit`)}>
+              עריכה
+            </Button>
+            {isTeacher && (
+              <Button variant="secondary" icon={<ArrowLeftRight />} onClick={() => setTransferOpen(true)}>
+                העברה למורה אחרת
+              </Button>
+            )}
+            {isTeacher && s.isActive && (
+              <Button
+                variant="ghost"
+                icon={<Trash2 />}
+                onClick={() => setDeleteOpen(true)}
+                className="text-danger hover:bg-danger/10"
+              >
+                מחיקה
+              </Button>
+            )}
+          </>
         }
       />
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
-        <div className="card min-w-0">
-          <h2 className="border-b border-line p-3.5 text-lg font-bold text-brand">פרטים אישיים</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 p-3.5">
-            {details.map(([label, value]) => (
-              <div key={label} className="contents">
-                <dt className="text-muted">{label}</dt>
-                <dd className="font-medium tabular" dir={label === 'טלפון' || label === 'אימייל' ? 'ltr' : undefined} style={{ textAlign: 'right' }}>
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          {s.placementRequest && (
-            <div className="border-t border-line p-3.5">
-              <div className="text-muted">בקשת שיבוץ</div>
-              <div className="mt-1">{s.placementRequest}</div>
-            </div>
-          )}
-        </div>
-
-        <div className="card min-w-0">
-          <h2 className="border-b border-line p-3.5 text-lg font-bold text-brand">קבוצות ותשלומים</h2>
-          {s.groups.length === 0 ? (
-            <Empty text="התלמידה לא רשומה לאף קבוצה כרגע" />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse tabular">
-                <thead>
-                  <tr>
-                    <th className="th">קבוצה</th>
-                    <th className="th">עונה</th>
-                    <th className="th">לתשלום</th>
-                    <th className="th">שולם</th>
-                    <th className="th">מצב</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.groups.map((g) => (
-                    <tr key={g.enrollmentId}>
-                      <td className="td">
-                        <Link to={`/groups/${g.groupId}`} className="font-bold text-brand hover:text-water">
-                          {g.groupName}
-                        </Link>
-                      </td>
-                      <td className="td">
-                        {seasonLabels[g.season]} {g.year}
-                      </td>
-                      <td className="td">{formatMoney(g.amountDue)}</td>
-                      <td className="td">{formatMoney(g.amountPaid)}</td>
-                      <td className="td">{g.amountPaid >= g.amountDue ? <span className="chip-leaf">שולם</span> : <span className="chip-berry">חסר {formatMoney(g.amountDue - g.amountPaid)}</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+    
+      <div className="-mt-3 mb-6 flex flex-wrap items-center gap-2">
+        <Badge tone="info">{healthFundLabels[s.healthFund]}</Badge>
+        {!s.isActive && <Badge tone="neutral">בארכיון</Badge>}
       </div>
 
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-3.5">
-          <h2 className="text-lg font-bold text-brand">דוחות לקופה</h2>
-          {reports.data && reports.data.length > 0 && <span className="text-sm text-muted">{reports.data.length} דוחות</span>}
+
+      {!s.isActive && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-card border-[1.5px] border-line/25 bg-page px-4 py-3">
+          <p className="text-sm text-ink/80">
+            התלמידה בארכיון ולא מופיעה ברשימה הרגילה. כדי לרשום אותה לקבוצה, יש להחזיר אותה לפעילות.
+          </p>
+          <Button onClick={() => setConfirmOpen(true)}>החזרה לפעילות</Button>
         </div>
-        {reports.isPending ? (
-          <Loading />
-        ) : reports.isError ? (
-          <ErrorState error={reports.error} onRetry={() => reports.refetch()} />
-        ) : reports.data.length === 0 ? (
-          <Empty text="עדיין לא הופקו דוחות לתלמידה הזו" />
-        ) : (
-          <ReportsTable reports={reports.data} showStudent={false} />
-        )}
+      )}
+
+      <div className="flex flex-col gap-8">
+        <Card title="פרטים">
+          <DetailList items={detailItems} />
+        </Card>
+
+        <StudentGroupsTable
+          groups={s.groups}
+          onUpdatePayment={setPayingRow}
+          onCancel={setCancelingRow}
+          onEnroll={s.isActive ? () => setEnrollOpen(true) : undefined}
+        />
+
+        <StudentReportsTable studentId={s.id} />
       </div>
-    </>
-  )
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={reactivate}
+        title="החזרה לפעילות"
+        message={`להחזיר את ${s.fullName} לפעילות? הרישומים לקבוצות שבוטלו בהעברה לארכיון לא חוזרים, ואפשר לרשום אותה מחדש.`}
+        confirmText="החזרה לפעילות"
+        tone="primary"
+        isLoading={updateStudent.isPending}
+      />
+      {enrollOpen && <EnrollModal onClose={() => setEnrollOpen(false)} student={studentRef} />}
+      {payingRow && <PaymentModal onClose={() => setPayingRow(null)} enrollment={payingRow} student={studentRef} />}
+      {cancelingRow && (
+        <CancelEnrollmentDialog onClose={() => setCancelingRow(null)} enrollment={cancelingRow} student={studentRef} />
+      )}
+      {transferOpen && <TransferStudentModal onClose={() => setTransferOpen(false)} student={studentRef} />}
+      {deleteOpen && <DeleteStudentDialog isOpen onClose={() => setDeleteOpen(false)} student={studentRef} />}
+    </div>
+  );
 }

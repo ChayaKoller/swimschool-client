@@ -1,122 +1,113 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { groupsApi } from '../api/endpoints'
-import type { Season } from '../api/types'
-import PageHeader from '../components/PageHeader'
-import Pagination from '../components/Pagination'
-import { Empty, ErrorState, Loading } from '../components/States'
-import { useDebounced } from '../components/useDebounced'
-import { formatMoney, seasonLabels } from '../lib/format'
+import clsx from "clsx";
+import { Plus } from "lucide-react";
+import { useNavigate } from "react-router";
+import { useGroups } from "../api/groups/hook";
+import { GROUP_FILTER_DEFAULTS } from "../api/groups/schema";
+import { isSeason } from "../lib/labels";
+import useDebounce from "../lib/useDebounce";
+import useUrlFilters from "../lib/useUrlFilters";
+import PageHeader from "../components/layout/PageHeader";
+import GroupCard from "../components/groups/GroupCard";
+import GroupFilters from "../components/groups/GroupFilters";
+import Button from "../components/ui/Button";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import Pagination from "../components/ui/Pagination";
+import Skeleton from "../components/ui/Skeleton";
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 12;
 
 export default function GroupsPage() {
-  const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [season, setSeason] = useState<Season | ''>('')
-  const [activeOnly, setActiveOnly] = useState(true)
-  const [page, setPage] = useState(1)
-  const search = useDebounced(name.trim())
+  const navigate = useNavigate();
+  const { values, page, setFilter, setPage, clearFilters, hasFilters } = useUrlFilters(GROUP_FILTER_DEFAULTS);
+  const debouncedName = useDebounce(values.name);
 
-  const query = useQuery({
-    queryKey: ['groups', { search, season, activeOnly, page }],
-    queryFn: () => groupsApi.list({ name: search || undefined, season, isActive: activeOnly ? true : undefined, page, pageSize: PAGE_SIZE }),
-    placeholderData: keepPreviousData,
-  })
+  const groups = useGroups({
+    name: debouncedName || undefined,
+    season: isSeason(values.season) ? values.season : undefined,
+    year: values.year === "all" ? undefined : Number(values.year),
+    isActive: values.status === "all" ? undefined : values.status === "active",
+    page,
+    pageSize: PAGE_SIZE,
+  });
+
+  const goToNew = () => navigate("/groups/new");
+
+  function renderContent() {
+    if (groups.isPending) return <Skeleton rows={6} />;
+
+    if (groups.isError) return <ErrorState error={groups.error} onRetry={() => groups.refetch()} />;
+
+    const { items, totalCount, totalPages } = groups.data;
+
+    if (items.length === 0) {
+      return hasFilters ? (
+        <EmptyState
+          title="לא נמצאו קבוצות שמתאימות לחיפוש"
+          description="אפשר לשנות את הסינונים או לנקות אותם."
+          action={
+            <Button variant="secondary" onClick={clearFilters}>
+              ניקוי סינונים
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          title={`אין קבוצות פעילות ב-${values.year}`}
+          description="כאן יופיעו הקבוצות שלך, עם התפוסה של כל אחת."
+          action={
+            <Button onClick={goToNew} icon={<Plus />}>
+              קבוצה חדשה
+            </Button>
+          }
+        />
+      );
+    }
+
+    return (
+      <>
+        <p className="mb-3 text-sm text-slate-600">
+          {totalCount === 1 ? (
+            "נמצאה קבוצה אחת"
+          ) : (
+            <>
+              נמצאו <span className="font-bold text-line tabular-nums">{totalCount}</span> קבוצות
+            </>
+          )}
+        </p>
+
+        <ul
+          className={clsx(
+            "grid gap-3 transition-opacity sm:grid-cols-2 lg:grid-cols-3",
+            groups.isPlaceholderData && "opacity-60",
+          )}
+        >
+          {items.map((group) => (
+            <li key={group.id} className="flex">
+              <GroupCard group={group} />
+            </li>
+          ))}
+        </ul>
+
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </>
+    );
+  }
 
   return (
-    <>
-      <PageHeader title="הקבוצות שלי" subtitle={query.data ? `${query.data.totalCount} קבוצות` : undefined} />
-      <div className="card">
-        <div className="flex flex-wrap gap-3 p-3.5">
-          <div className="min-w-[160px] flex-1">
-            <label className="field-label" htmlFor="g-name">
-              חיפוש לפי שם
-            </label>
-            <input id="g-name" className="input" placeholder="למשל: מתחילות" value={name} onChange={(e) => { setName(e.target.value); setPage(1) }} />
-          </div>
-          <div className="min-w-[140px] flex-1">
-            <label className="field-label" htmlFor="g-season">
-              עונה
-            </label>
-            <select id="g-season" className="input" value={season} onChange={(e) => { setSeason(e.target.value as Season | ''); setPage(1) }}>
-              <option value="">כל העונות</option>
-              {Object.entries(seasonLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-w-[140px] flex-1">
-            <label className="field-label" htmlFor="g-active">
-              מצב
-            </label>
-            <select id="g-active" className="input" value={activeOnly ? 'active' : 'all'} onChange={(e) => { setActiveOnly(e.target.value === 'active'); setPage(1) }}>
-              <option value="active">פעילות בלבד</option>
-              <option value="all">כולל ארכיון</option>
-            </select>
-          </div>
-        </div>
+    <div>
+      <PageHeader
+        title="קבוצות"
+        actions={
+          <Button onClick={goToNew} icon={<Plus />}>
+            קבוצה חדשה
+          </Button>
+        }
+      />
 
-        {query.isPending ? (
-          <Loading />
-        ) : query.isError ? (
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        ) : query.data.items.length === 0 ? (
-          <Empty text="לא נמצאו קבוצות" />
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse tabular">
-                <thead>
-                  <tr>
-                    <th className="th">שם הקבוצה</th>
-                    <th className="th">עונה</th>
-                    <th className="th">שיעורים</th>
-                    <th className="th">מקומות</th>
-                    <th className="th">מחיר</th>
-                    <th className="th">מצב</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data.items.map((g) => {
-                    const full = g.freeSpots <= 0
-                    const percent = g.maxStudents > 0 ? Math.min(100, Math.round((g.enrolledCount / g.maxStudents) * 100)) : 0
-                    return (
-                      <tr key={g.id} className="cursor-pointer hover:bg-[#fcfaf8]" onClick={() => navigate(`/groups/${g.id}`)}>
-                        <td className="td">
-                          <button className="font-bold text-brand hover:text-water" onClick={() => navigate(`/groups/${g.id}`)}>
-                            {g.name}
-                          </button>
-                        </td>
-                        <td className="td">
-                          {seasonLabels[g.season]} {g.year}
-                        </td>
-                        <td className="td">{g.lessonsCount}</td>
-                        <td className="td">
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-[70px] overflow-hidden rounded-full bg-sand">
-                              <div className={`h-full ${full ? 'bg-berry' : 'bg-water-bright'}`} style={{ width: `${percent}%` }} />
-                            </div>
-                            {g.enrolledCount} / {g.maxStudents}
-                          </div>
-                        </td>
-                        <td className="td">{formatMoney(g.price)}</td>
-                        <td className="td">
-                          {!g.isActive ? <span className="chip-muted">בארכיון</span> : full ? <span className="chip-berry">מלאה</span> : <span className="chip-leaf">פעילה</span>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <Pagination page={query.data.page} totalPages={query.data.totalPages} totalCount={query.data.totalCount} pageSize={query.data.pageSize} onChange={setPage} />
-          </>
-        )}
-      </div>
-    </>
-  )
+      <GroupFilters values={values} onChange={setFilter} onClear={clearFilters} hasFilters={hasFilters} />
+
+      {renderContent()}
+    </div>
+  );
 }

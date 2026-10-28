@@ -1,112 +1,213 @@
-import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { groupsApi } from '../api/endpoints'
-import PageHeader from '../components/PageHeader'
-import { Empty, ErrorState, Loading } from '../components/States'
-import { formatDateTime, formatMoney, seasonLabels } from '../lib/format'
-import EnrollDialog from './EnrollDialog'
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { ArrowRight, ClipboardCheck, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
+import { useGroup } from "../api/groups/hook";
+import { useDeleteLesson } from "../api/lessons/hook";
+import { getErrorMessage, isNotFound } from "../api/apiError";
+import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/useToast";
+import { formatLessonTime, formatMoney } from "../lib/format";
+import { seasonLabels } from "../lib/labels";
+import useGoBack from "../lib/useGoBack";
+import type { LessonDto } from "../types/typesDtos";
+import PageHeader from "../components/layout/PageHeader";
+import EnrollModal from "../components/enrollment/EnrollModal";
+import AddLessonsModal from "../components/groups/AddLessonsModal";
+import DeleteGroupDialog from "../components/groups/DeleteGroupDialog";
+import GroupLessonsTable from "../components/groups/GroupLessonsTable";
+import GroupStudentsTable from "../components/groups/GroupStudentsTable";
+import MoveLessonModal from "../components/groups/MoveLessonModal";
+import OccupancyBar from "../components/groups/OccupancyBar";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
+import DetailList from "../components/ui/DetailList";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import LoadingState from "../components/ui/LoadingState";
 
 export default function GroupDetailsPage() {
-  const id = Number(useParams().id)
-  const navigate = useNavigate()
-  const [enrolling, setEnrolling] = useState(false)
-  const query = useQuery({ queryKey: ['group', id], queryFn: () => groupsApi.get(id), enabled: Number.isInteger(id) })
+  const { id } = useParams();
+  const groupId = Number(id);
+  const group = useGroup(groupId);
+  const deleteLesson = useDeleteLesson(groupId);
+  const { user } = useAuth();
+  const isTeacher = user?.role === "Teacher";
+  const toast = useToast();
+  const navigate = useNavigate();
+  const goBack = useGoBack("/groups");
 
-  if (query.isPending) return <Loading />
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />
+ 
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [movingLesson, setMovingLesson] = useState<LessonDto | null>(null);
+  const [deletingLesson, setDeletingLesson] = useState<LessonDto | null>(null);
 
-  const group = query.data
-  const full = group.freeSpots <= 0
-  const unpaid = group.students.filter((s) => s.amountOwed > 0).length
-  const now = Date.now()
-  const upcoming = group.lessons.filter((l) => new Date(l.startTime).getTime() >= now)
-  const past = group.lessons.length - upcoming.length
+  function confirmDeleteLesson() {
+    if (!deletingLesson) return;
+    deleteLesson.mutate(deletingLesson.lessonId, {
+      onSuccess: () => {
+        toast.success("השיעור נמחק");
+        setDeletingLesson(null);
+      },
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+        setDeletingLesson(null);
+      },
+    });
+  }
+
+  const backButton = (
+    <Button variant="ghost" onClick={goBack} icon={<ArrowRight />} className="-ms-3 mb-2 self-start">
+      חזרה לרשימה
+    </Button>
+  );
+
+  if (group.isPending) return <LoadingState label="טוען את פרטי הקבוצה" />;
+
+  if (group.isError) {
+    return isNotFound(group.error) ? (
+      <EmptyState
+        title="הקבוצה לא נמצאה"
+        description="ייתכן שהיא נמחקה."
+        action={
+          <Button variant="secondary" onClick={() => navigate("/groups")}>
+            לרשימת הקבוצות
+          </Button>
+        }
+      />
+    ) : (
+      <ErrorState error={group.error} onRetry={() => group.refetch()} />
+    );
+  }
+
+  const g = group.data;
+  const hasStudents = g.students.length > 0;
+
+  // למה אי אפשר לרשום עכשיו. null = אפשר
+  const enrollBlocked = !g.isActive
+    ? "הקבוצה אינה פעילה."
+    : g.freeSpots === 0
+      ? "הקבוצה מלאה. כדי לרשום תלמידה נוספת, יש להעלות את מספר המקומות בעדכון הקבוצה, או לבטל רישום קיים."
+      : null;
+
+  const detailItems = [
+    { label: "מחיר", value: <span className="tabular-nums">{formatMoney(g.price)}</span> },
+    {
+      label: "מספר שיעורים",
+      value: <span className="tabular-nums">{g.lessonsCount === 1 ? "שיעור אחד" : `${g.lessonsCount} שיעורים`}</span>,
+    },
+    { label: "תפוסה", value: <OccupancyBar enrolled={g.enrolledCount} max={g.maxStudents} /> },
+  ];
 
   return (
-    <>
-      <Link to="/groups" className="font-medium text-water hover:underline">
-        → חזרה לקבוצות
-      </Link>
+    <div className="flex flex-col">
+      {backButton}
+
       <PageHeader
-        title={group.name}
-        subtitle={`${seasonLabels[group.season]} ${group.year}${group.isActive ? '' : ' · בארכיון'}`}
+        title={g.name}
         actions={
-          <button className="btn-primary" disabled={full || !group.isActive} onClick={() => setEnrolling(true)} title={full ? 'הקבוצה מלאה' : undefined}>
-            + רישום תלמידה
-          </button>
+          <>
+            <Button icon={<UserPlus />} onClick={() => setEnrollOpen(true)} disabled={enrollBlocked !== null}>
+              רישום תלמידה
+            </Button>
+            <Button variant="secondary" icon={<Pencil />} onClick={() => navigate(`/groups/${g.id}/edit`)}>
+              עדכון
+            </Button>
+            {isTeacher && (
+              <Button
+                variant="ghost"
+                icon={<Trash2 />}
+                onClick={() => setDeleteOpen(true)}
+                disabled={hasStudents}
+                className="text-danger hover:bg-danger/10"
+              >
+                מחיקה
+              </Button>
+            )}
+            {isTeacher && (
+              <Button variant="secondary" icon={<ClipboardCheck />} onClick={() => navigate(`/groups/${g.id}/attendance`)}>
+                טבלת נוכחות
+              </Button>
+            )}
+          </>
         }
       />
 
-      <div className="card grid grid-cols-2 tabular md:grid-cols-4">
-        {[
-          [`${group.enrolledCount} / ${group.maxStudents}`, 'תלמידות רשומות'],
-          [String(group.lessonsCount), 'שיעורים בקורס'],
-          [formatMoney(group.price), 'מחיר הקבוצה'],
-          [String(unpaid), 'לא שילמו במלואו'],
-        ].map(([value, label], i) => (
-          <div key={label} className={`p-3.5 ${i % 2 === 0 ? 'border-l border-line' : ''} ${i < 2 ? 'border-b border-line md:border-b-0' : ''} md:border-l md:last:border-l-0`}>
-            <b className="block text-xl text-brand">{value}</b>
-            <span className="text-[13px] text-muted">{label}</span>
-          </div>
-        ))}
+      {/* שורת התגיות מתחת לשם, ומתחתיה ההסברים לכפתורים הנעולים */}
+      <div className="-mt-3 mb-6 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="info">
+            {seasonLabels[g.season]} {g.year}
+          </Badge>
+          {!g.isActive && <Badge tone="neutral">לא פעילה</Badge>}
+          {g.freeSpots === 0 && <Badge tone="danger">מלאה</Badge>}
+        </div>
+        {enrollBlocked && <p className="text-xs text-slate-500">{enrollBlocked}</p>}
+        {isTeacher && hasStudents && (
+          <p className="text-xs text-slate-500">כדי למחוק את הקבוצה, יש לבטל קודם את הרישום של התלמידות.</p>
+        )}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-        <div className="card min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-3.5">
-            <h2 className="text-lg font-bold text-brand">תלמידות בקבוצה</h2>
-            <span className={full ? 'chip-berry' : 'chip-water'}>{full ? 'הקבוצה מלאה' : group.freeSpots === 1 ? 'מקום אחד פנוי' : `${group.freeSpots} מקומות פנויים`}</span>
-          </div>
-          {group.students.length === 0 ? (
-            <Empty text="עדיין אין תלמידות בקבוצה" />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse tabular">
-                <thead>
-                  <tr>
-                    <th className="th">שם</th>
-                    <th className="th">תשלום</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.students.map((s) => (
-                    <tr key={s.id} className="cursor-pointer hover:bg-[#fcfaf8]" onClick={() => navigate(`/students/${s.id}`)}>
-                      <td className="td">
-                        <Link to={`/students/${s.id}`} className="font-bold text-brand hover:text-water" onClick={(e) => e.stopPropagation()}>
-                          {s.fullName}
-                        </Link>
-                      </td>
-                      <td className="td">{s.amountOwed > 0 ? <span className="chip-berry">חסר {formatMoney(s.amountOwed)}</span> : <span className="chip-leaf">שולם</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col gap-8">
+        <Card title="פרטים">
+          <DetailList items={detailItems} />
+        </Card>
 
-        <div className="card min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line p-3.5">
-            <h2 className="text-lg font-bold text-brand">השיעורים הקרובים</h2>
-            {past > 0 && <span className="text-sm text-muted">{past} שיעורים כבר התקיימו</span>}
+        <GroupStudentsTable students={g.students} />
+
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-ink">
+              שיעורים <span className="text-sm font-medium text-ink/60 tabular-nums">({g.lessons.length})</span>
+            </h2>
+            {isTeacher && (
+              <Button variant="secondary" icon={<Plus />} onClick={() => setAddOpen(true)}>
+                הוספת שיעורים
+              </Button>
+            )}
           </div>
-          {upcoming.length === 0 ? (
-            <Empty text="אין שיעורים קרובים" />
+
+          {g.lessons.length === 0 ? (
+            <EmptyState title="אין שיעורים בקבוצה" />
           ) : (
-            <ul className="py-1.5">
-              {upcoming.slice(0, 8).map((l) => (
-                <li key={l.lessonId} className="flex items-center justify-between gap-2 border-b border-line-soft px-3.5 py-2.5 last:border-b-0">
-                  <span className="font-medium">{formatDateTime(l.startTime)}</span>
-                  {l.isMakeup && <span className="chip-berry">שיעור השלמה</span>}
-                </li>
-              ))}
-            </ul>
+            <GroupLessonsTable
+              lessons={g.lessons}
+              canManage={isTeacher}
+              onMove={setMovingLesson}
+              onDelete={setDeletingLesson}
+            />
           )}
-        </div>
+        </section>
       </div>
 
-      {enrolling && <EnrollDialog group={group} onClose={() => setEnrolling(false)} />}
-    </>
-  )
+      {/* החלונות עם טופס: קיימים רק כשהם פתוחים, כדי שכל פתיחה תתחיל מטופס נקי */}
+      {enrollOpen && (
+        <EnrollModal
+          onClose={() => setEnrollOpen(false)}
+          group={{ id: g.id, name: g.name, price: g.price }}
+        />
+      )}
+      {addOpen && <AddLessonsModal groupId={g.id} onClose={() => setAddOpen(false)} />}
+      {movingLesson && <MoveLessonModal lesson={movingLesson} onClose={() => setMovingLesson(null)} />}
+
+      <ConfirmDialog
+        isOpen={deletingLesson !== null}
+        onClose={() => setDeletingLesson(null)}
+        onConfirm={confirmDeleteLesson}
+        title="מחיקת שיעור"
+        message={
+          deletingLesson
+            ? `למחוק את השיעור של ${formatLessonTime(deletingLesson.startTime)}? מספר השיעורים בקבוצה יקטן באחד.`
+            : ""
+        }
+        confirmText="מחיקה"
+        isLoading={deleteLesson.isPending}
+      />
+
+      {isTeacher && <DeleteGroupDialog group={g} isOpen={deleteOpen} onClose={() => setDeleteOpen(false)} />}
+    </div>
+  );
 }
