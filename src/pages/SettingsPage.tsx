@@ -4,6 +4,7 @@ import ReportSettingsForm from "../components/settings/ReportSettingsForm";
 import ErrorState from "../components/ui/ErrorState";
 import LoadingState from "../components/ui/LoadingState";
 
+
 export default function SettingsPage() {
   const settings = useReportSettings();
 

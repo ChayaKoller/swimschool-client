@@ -7,6 +7,7 @@ import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import DataTable, { type Column } from "../ui/DataTable";
 import EmptyState from "../ui/EmptyState";
+import AbsencesCount from "./AbsencesCount";
 
 type StudentGroupsTableProps = {
   groups: StudentGroupDto[];
@@ -64,6 +65,7 @@ const baseColumns: Column<StudentGroupDto>[] = [
     ),
   },
   { key: "season", header: "עונה ושנה", render: (g) => `${seasonLabels[g.season]} ${g.year}` },
+    { key: "absencesCount", header: "היעדרויות", render: (g) => <AbsencesCount count={g.absencesCount} /> },
   { key: "amountDue", header: "לתשלום", render: (g) => <span className="tabular-nums">{formatMoney(g.amountDue)}</span> },
   { key: "amountPaid", header: "שולם", render: (g) => <span className="tabular-nums">{formatMoney(g.amountPaid)}</span> },
   {

@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useStudents } from "../api/students/hook";
 import { STUDENT_FILTER_DEFAULTS } from "../api/students/schema";
-
+import AbsencesCount from "../components/students/AbsencesCount";
 import useDebounce from "../lib/useDebounce";
 import useUrlFilters from "../lib/useUrlFilters";
 import { formatMoney } from "../lib/format";
@@ -48,15 +48,14 @@ const studentColumns: Column<StudentListItemDto>[] = [
       </a>
     ),
   },
+    {
+    key: "activeGroupName",
+    header: "קבוצה",
+    render: (s) => s.activeGroupName ?? <span className="text-slate-400">—</span>,
+  },
   { key: "healthFund", header: "קופה", render: (s) => <Badge tone="info">{healthFundLabels[s.healthFund]}</Badge> },
   { key: "amountOwed", header: "חוב", render: renderOwed },
-  {
-    key: "absencesCount",
-    header: "היעדרויות",
-    render: (s) => (
-      <span className={clsx("tabular-nums", s.absencesCount >= 3 && "font-bold text-danger")}>{s.absencesCount}</span>
-    ),
-  },
+    { key: "absencesCount", header: "היעדרויות", render: (s) => <AbsencesCount count={s.absencesCount} /> },
 ];
 
 const statusColumn: Column<StudentListItemDto> = {
@@ -138,7 +137,10 @@ export default function StudentsPage() {
             mobileCard={(s) => (
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
+                  
                   <p className="truncate font-semibold text-line">{s.fullName}</p>
+                                    <p className="truncate font-semibold text-line">{s.fullName}</p>
+                  {s.activeGroupName && <p className="truncate text-sm text-slate-600">{s.activeGroupName}</p>}
                   <p dir="ltr" className="text-end text-sm text-slate-500 tabular-nums">
                     {s.phone}
                   </p>

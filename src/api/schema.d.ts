@@ -2742,6 +2742,8 @@ export interface components {
             amountDue: number;
             /** Format: double */
             amountPaid: number;
+            /** Format: int32 */
+            absencesCount: number;
         };
         StudentListItemDto: {
             /** Format: int32 */
@@ -2755,6 +2757,7 @@ export interface components {
             amountOwed: number;
             /** Format: int32 */
             absencesCount: number;
+            activeGroupName: string | null;
         };
         StudentListItemDtoPagedResult: {
             items: components["schemas"]["StudentListItemDto"][];
