@@ -1,7 +1,7 @@
 import { FormProvider, useForm, useWatch, type DefaultValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Save } from "lucide-react";
-import { groupFormSchema, weeklyTimes, type GroupFormValues } from "../../api/groups/schema";
+import { autoLessonTimes, groupFormSchema, type GroupFormValues } from "../../api/groups/schema";
 import { seasonLabels, toOptions } from "../../lib/labels";
 import { useServerErrors } from "../form/useServerErrors";
 import UnsavedChangesGuard from "../form/UnsavedChangesGuard";
@@ -28,7 +28,8 @@ export type GroupFormProps = {
 const CODE_TO_FIELD = { MAX_BELOW_ENROLLED: "maxStudents" } as const;
 const SEASON_OPTIONS = toOptions(seasonLabels);
 const LESSON_MODE_OPTIONS = [
-  { value: "weekly", label: "כל שבוע באותו יום ושעה" },
+  { value: "weekly", label: "פעם בשבוע, באותו יום ושעה" },
+  { value: "twiceWeekly", label: "פעמיים בשבוע, בשני ימים קבועים" },
   { value: "manual", label: "רשימת מועדים ידנית" },
 ];
 const READ_ONLY_CLASSES = "read-only:cursor-not-allowed read-only:bg-page read-only:text-slate-500";
@@ -49,17 +50,18 @@ export default function GroupForm({ defaultValues, isEdit, enrolledCount, onSubm
 
 
 
-  const [mode, season, year, firstLessonAt, weeklyCount, lessonTimes] = useWatch({
+  const [mode, season, year, firstLessonAt, secondLessonAt, weeklyCount, lessonTimes] = useWatch({
     control,
-    name: ["lessonMode", "season", "year", "firstLessonAt", "weeklyCount", "lessonTimes"],
+    name: ["lessonMode", "season", "year", "firstLessonAt", "secondLessonAt", "weeklyCount", "lessonTimes"],
   });
+  const isTwice = mode === "twiceWeekly";
   const previewTimes =
-    mode === "weekly"
-      ? weeklyTimes(firstLessonAt, Number(weeklyCount))
-      : lessonTimes
+    mode === "manual"
+      ? lessonTimes
         .map((time) => time.value)
         .filter(Boolean)
-        .sort();
+        .sort()
+      : autoLessonTimes(mode, firstLessonAt, secondLessonAt, Number(weeklyCount));
 
   return (
     <FormProvider {...methods}>
@@ -152,22 +154,40 @@ export default function GroupForm({ defaultValues, isEdit, enrolledCount, onSubm
               />
 
               <div className="grid items-start gap-x-6 gap-y-5 md:grid-cols-2">
-                {mode === "weekly" ? (
+                {mode === "manual" ? (
+                  <LessonTimesField />
+                ) : (
                   <div className="flex flex-col gap-5">
                     <FormField
                       required
-                      label="מועד השיעור הראשון"
+                      label={isTwice ? "השיעור הראשון ביום הראשון" : "מועד השיעור הראשון"}
                       htmlFor="firstLessonAt"
                       error={errors.firstLessonAt?.message}
                     >
                       <TextField type="datetime-local" {...fieldProps("firstLessonAt")} />
                     </FormField>
 
+                    {isTwice && (
+                      <FormField
+                        required
+                        label="השיעור הראשון ביום השני"
+                        htmlFor="secondLessonAt"
+                        hint="באותו שבוע, אחרי היום הראשון. אפשר בשעה אחרת"
+                        error={errors.secondLessonAt?.message}
+                      >
+                        <TextField type="datetime-local" {...fieldProps("secondLessonAt")} />
+                      </FormField>
+                    )}
+
                     <FormField
                       required
                       label="מספר שיעורים"
                       htmlFor="weeklyCount"
-                      hint="שיעור אחד בכל שבוע, באותו יום ובאותה שעה"
+                      hint={
+                        isTwice
+                          ? "סך כל השיעורים בשני הימים יחד"
+                          : "שיעור אחד בכל שבוע, באותו יום ובאותה שעה"
+                      }
                       error={errors.weeklyCount?.message}
                     >
                       <TextField
@@ -179,8 +199,6 @@ export default function GroupForm({ defaultValues, isEdit, enrolledCount, onSubm
                       />
                     </FormField>
                   </div>
-                ) : (
-                  <LessonTimesField />
                 )}
 
                 <LessonPreview times={previewTimes} />

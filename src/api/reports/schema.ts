@@ -77,6 +77,28 @@ export function priceFor(type: TreatmentType, settings: ReportSettingsDto): numb
 export function mergeDates(current: string[], found: string[]): string[] {
   return [...new Set([...current, ...found])].sort();
 }
+
+type AddDatesResult = { ok: true; dates: string[]; added: number } | { ok: false; message: string };
+
+// הוספת תאריכים לדוח: איחוד, ובדיקה שיש חדשים ושלא עוברים את המקסימום
+export function addReportDates(current: string[], found: string[]): AddDatesResult {
+  const dates = mergeDates(current, found);
+  const added = dates.length - current.length;
+  if (added === 0) {
+    return { ok: false, message: "כל התאריכים האלה כבר נמצאים בדוח." };
+  }
+  if (dates.length > MAX_REPORT_DATES) {
+    return {
+      ok: false,
+      message: `יחד עם התאריכים שכבר בדוח יש ${dates.length} תאריכים, ואפשר עד ${MAX_REPORT_DATES}.`,
+    };
+  }
+  return { ok: true, dates, added };
+}
+
+export function addedDatesMessage(added: number): string {
+  return added === 1 ? "נוסף תאריך אחד" : `נוספו ${added} תאריכים`;
+}
 export function toReportDetails(values: ReportFormValues): UpdateReportRequest {
   return {
     treatmentType: values.treatmentType,

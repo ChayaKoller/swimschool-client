@@ -1,15 +1,18 @@
 import { z } from "zod";
-import dayjs from "dayjs";
 import type { DefaultValues } from "react-hook-form";
 import { amount, requiredText, wholeNumber } from "../../lib/validation";
 import { toServerLocal } from "../../lib/format";
 import { checkLessonTimes, lessonTimesField } from "../lessons/schema";
+import { recurringDates, secondDayError } from "../../lib/recurringDates";
 import type {
   CreateGroupRequest,
   GroupDetailsDto,
   Season,
   UpdateGroupRequest,
 } from "../../types/typesDtos";
+
+const LOCAL_TIME = "YYYY-MM-DDTHH:mm";
+const MAX_LESSONS = 200;
 
 export const groupFormSchema = z
   .object({
@@ -19,13 +22,14 @@ export const groupFormSchema = z
     price: amount,
     maxStudents: wholeNumber(1, 500),
     isActive: z.boolean(),
-    lessonMode: z.enum(["weekly", "manual", "keep"]),
+    lessonMode: z.enum(["weekly", "twiceWeekly", "manual", "keep"]),
     firstLessonAt: z.string(),
+    secondLessonAt: z.string(),
     weeklyCount: z.string(),
     lessonTimes: lessonTimesField,
   })
   .superRefine((data, ctx) => {
-    if (data.lessonMode === "weekly") {
+    if (data.lessonMode === "weekly" || data.lessonMode === "twiceWeekly") {
       if (!data.firstLessonAt) {
         ctx.addIssue({
           code: "custom",
@@ -35,12 +39,21 @@ export const groupFormSchema = z
       }
  
       const count = Number(data.weeklyCount);
-      if (!Number.isInteger(count) || count < 1 || count > 200) {
+      if (!Number.isInteger(count) || count < 1 || count > MAX_LESSONS) {
         ctx.addIssue({
           code: "custom",
           path: ["weeklyCount"],
-          message: "יש להזין מספר שיעורים שלם בין 1 ל-200",
+          message: `יש להזין מספר שיעורים שלם בין 1 ל-${MAX_LESSONS}`,
         });
+      }
+    }
+
+    if (data.lessonMode === "twiceWeekly") {
+      const error = data.secondLessonAt
+        ? secondDayError(data.firstLessonAt, data.secondLessonAt)
+        : "יש לבחור תאריך ושעה לשיעור הראשון ביום השני";
+      if (error) {
+        ctx.addIssue({ code: "custom", path: ["secondLessonAt"], message: error });
       }
     }
  
@@ -66,6 +79,7 @@ export function getGroupDefaults(group?: GroupDetailsDto): DefaultValues<GroupFo
       isActive: true,
       lessonMode: "weekly",
       firstLessonAt: "",
+      secondLessonAt: "",
       weeklyCount: "",
       lessonTimes: [{ value: "" }],
     };
@@ -80,6 +94,7 @@ export function getGroupDefaults(group?: GroupDetailsDto): DefaultValues<GroupFo
     isActive: group.isActive,
     lessonMode: "keep",
     firstLessonAt: "",
+    secondLessonAt: "",
     weeklyCount: "",
     lessonTimes: [],
   };
@@ -99,6 +114,17 @@ export function toCreateGroupRequest(values: GroupFormValues): CreateGroupReques
       firstLessonAt: toServerLocal(values.firstLessonAt),
       lessonsCount: Number(values.weeklyCount),
     };
+  }
+
+  // פעמיים בשבוע: נשלח לשרת כרשימת מועדים, כמו רשימה ידנית
+  if (values.lessonMode === "twiceWeekly") {
+    const times = autoLessonTimes(
+      "twiceWeekly",
+      values.firstLessonAt,
+      values.secondLessonAt,
+      Number(values.weeklyCount),
+    );
+    return { ...group, lessonTimes: times.map(toServerLocal) };
   }
  
   return {
@@ -122,12 +148,19 @@ export function toUpdateGroupRequest(
   };
 }
  
-// לתצוגה המקדימה: כל המועדים של "כל שבוע", בשעון ישראל כמו בשדה
-export function weeklyTimes(first: string, count: number): string[] {
-  if (!first || !Number.isInteger(count) || count < 1 || count > 200) return [];
-  return Array.from({ length: count }, (_, i) =>
-    dayjs(first).add(i, "week").format("YYYY-MM-DDTHH:mm"),
-  );
+// המועדים שנוצרים אוטומטית (פעם או פעמיים בשבוע): לתצוגה המקדימה ולשליחה
+export function autoLessonTimes(
+  mode: GroupFormValues["lessonMode"],
+  first: string,
+  second: string,
+  count: number,
+): string[] {
+  if (count > MAX_LESSONS) return [];
+  if (mode === "weekly") return recurringDates([first], count, LOCAL_TIME);
+  if (mode === "twiceWeekly" && !secondDayError(first, second)) {
+    return recurringDates([first, second], count, LOCAL_TIME);
+  }
+  return [];
 }
 export const GROUP_FILTER_DEFAULTS = {
   name: "",

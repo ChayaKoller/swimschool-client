@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { CalendarCheck } from "lucide-react";
 import type { StudentGroupDto } from "../../types/typesDtos";
 import { useAttendedDates } from "../../api/reports/hook";
-import { MAX_REPORT_DATES, mergeDates } from "../../api/reports/schema";
+import { addedDatesMessage, addReportDates } from "../../api/reports/schema";
 import { getErrorMessage } from "../../api/apiError";
 import { useToast } from "../../context/useToast";
 import { seasonLabels } from "../../lib/labels";
@@ -63,18 +63,13 @@ export default function FillFromAttendanceModal({
                         setMessage("לא נמצאו שיעורים שהתלמידה נכחה בהם בטווח הזה.");
                         return;
                     }
-                    const merged = mergeDates(currentDates, found);
-                    const added = merged.length - currentDates.length;
-                    if (added === 0) {
-                        setMessage("כל התאריכים שנמצאו כבר נמצאים בדוח.");
+                    const result = addReportDates(currentDates, found);
+                    if (!result.ok) {
+                        setMessage(result.message);
                         return;
                     }
-                    if (merged.length > MAX_REPORT_DATES) {
-                        setMessage(`יחד עם התאריכים שכבר בדוח יש ${merged.length} תאריכים, ואפשר עד ${MAX_REPORT_DATES}. כדאי לצמצם את הטווח.`);
-                        return;
-                    }
-                    onApply(merged);
-                    toast.success(added === 1 ? "נוסף תאריך אחד" : `נוספו ${added} תאריכים`);
+                    onApply(result.dates);
+                    toast.success(addedDatesMessage(result.added));
                     onClose();
                 },
                 onError: (error) => toast.error(getErrorMessage(error)),

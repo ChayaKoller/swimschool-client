@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FormProvider, useForm, useWatch, type DefaultValues } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarCheck, Download, Save } from "lucide-react";
+import { CalendarCheck, CalendarDays, CalendarRange, Download, Save } from "lucide-react";
 import { useStudent } from "../../api/students/hook";
 import { priceFor, reportFormSchema, type ReportFormValues } from "../../api/reports/schema";
 import type { ReportDto, ReportSettingsDto, TreatmentType } from "../../types/typesDtos";
@@ -20,6 +20,7 @@ import Button from "../ui/Button";
 import StudentPicker from "../enrollment/StudentPicker";
 import ReportDatesField from "./ReportDatesField";
 import FillFromAttendanceModal from "./FillFromAttendanceModal";
+import FillByScheduleModal from "./FillByScheduleModal";
 
 export type ReportFormProps = {
     defaultValues: DefaultValues<ReportFormValues>;
@@ -45,7 +46,9 @@ export default function ReportForm({ defaultValues, settings, report, onSubmit, 
     } = methods;
 
     const { handleServerError, formError } = useServerErrors(setError, CODE_TO_FIELD);
-    const [fillOpen, setFillOpen] = useState(false);
+    // איזה חלון מילוי פתוח: לפי הנוכחות, פעם בשבוע (1) או פעמיים בשבוע (2)
+    const [fill, setFill] = useState<"attendance" | 1 | 2 | null>(null);
+    const closeFill = () => setFill(null);
 
     const [studentId, hasInsurance, lessonDates, price] = useWatch({
         control,
@@ -56,7 +59,8 @@ export default function ReportForm({ defaultValues, settings, report, onSubmit, 
     const isEdit = report !== undefined;
     const pickStudent = !isEdit && !defaultValues.studentId; // דוח חדש בלי תלמידה מהכתובת
     const healthFund = report?.healthFund ?? student.data?.healthFund;
-    const count = lessonDates.filter((row) => row.date).length;
+    const filledDates = lessonDates.map((row) => row.date).filter(Boolean);
+    const count = filledDates.length;
     const hasPrice = Number.isFinite(price);
 
     const treatmentRegistration = register("treatmentType", {
@@ -193,14 +197,22 @@ export default function ReportForm({ defaultValues, settings, report, onSubmit, 
                 <Card
                     title="תאריכי הטיפולים"
                     actions={
-                        <Button
-                            variant="secondary"
-                            icon={<CalendarCheck />}
-                            onClick={() => setFillOpen(true)}
-                            disabled={!student.data}
-                        >
-                            מילוי לפי הנוכחות
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="secondary"
+                                icon={<CalendarCheck />}
+                                onClick={() => setFill("attendance")}
+                                disabled={!student.data}
+                            >
+                                מילוי לפי הנוכחות
+                            </Button>
+                            <Button variant="secondary" icon={<CalendarDays />} onClick={() => setFill(1)}>
+                                מילוי פעם בשבוע
+                            </Button>
+                            <Button variant="secondary" icon={<CalendarRange />} onClick={() => setFill(2)}>
+                                מילוי פעמיים בשבוע
+                            </Button>
+                        </div>
                     }
                 >
                     <ReportDatesField />
@@ -236,13 +248,23 @@ export default function ReportForm({ defaultValues, settings, report, onSubmit, 
                 <FormError message={formError} />
             </form>
 
-            {fillOpen && student.data && (
+            {fill === "attendance" && student.data && (
                 <FillFromAttendanceModal
                     studentId={student.data.id}
                     groups={student.data.groups}
-                    currentDates={lessonDates.map((row) => row.date).filter(Boolean)}
+                    currentDates={filledDates}
                     onApply={applyDates}
-                    onClose={() => setFillOpen(false)}
+                    onClose={closeFill}
+                />
+            )}
+
+            {(fill === 1 || fill === 2) && (
+                <FillByScheduleModal
+                    timesPerWeek={fill}
+                    defaultCount={settings.defaultTreatmentsCount}
+                    currentDates={filledDates}
+                    onApply={applyDates}
+                    onClose={closeFill}
                 />
             )}
 
