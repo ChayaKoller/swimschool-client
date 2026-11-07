@@ -1,9 +1,9 @@
-import { NavLink } from "react-router";
 import clsx from "clsx";
 import { X } from "lucide-react";
-import { navItemsFor } from "./navItems";
-import { useAuth } from "../../context/useAuth";
+import { NavLink } from "react-router";
 import sideLogo from "../../assets/sideLogo.png";
+import { useAuth } from "../../context/useAuth";
+import { navItemsFor } from "./navItems";
 
 export type SidebarProps = {
   isOpen: boolean;
@@ -62,6 +62,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             {item.label}
           </NavLink>
         ))}
+                 <p className="mt-auto pt-4 text-center text-xs text-slate-400">
+          עיצוב ופיתוח: <span className="font-semibold text-ink">Chaya Koller</span>
+        </p>
       </nav>
     </>
   );
